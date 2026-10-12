@@ -287,27 +287,34 @@
 
   <?!= include("Script"); ?>
   <script>
-  // 🔗 Masukkan URL Web App Google Apps Script Anda di sini
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzdY0-JrylBpbT9TC5KrP8cWbwPdd_9saJk-mPHAeS9amcevsyz5GkPfuKtLpk3ZG-Ng/exec";
 
-  // Contoh mengambil data Berita dari Google Sheet ke GitHub
   function muatDataBerita() {
-    fetch(SCRIPT_URL + "?action=getBerita")
-      .then(response => response.json())
-      .then(data => {
+    $.ajax({
+      url: SCRIPT_URL + "?action=getBerita",
+      dataType: "jsonp", // ✨ JSONP melewati batasan CORS Google Apps Script
+      success: function(data) {
         let html = "";
-        data.forEach(item => {
-          html += `<div class="col-md-4">
-                     <div class="card p-3 shadow-sm">
-                       <h5>${item.judul}</h5>
-                       <p>${item.isi}</p>
-                       <img src="${item.gambar}" style="width:100%; object-fit:contain;" />
-                     </div>
-                   </div>`;
-        });
+        if (!data || data.length === 0) {
+          html = '<div class="col-12 text-center text-muted"><p>Belum ada berita atau informasi.</p></div>';
+        } else {
+          data.forEach(item => {
+            html += `<div class="col-md-4">
+                       <div class="card p-3 shadow-sm h-100">
+                         <h5>${item.judul || ''}</h5>
+                         <p class="text-muted small">${item.tanggal || ''}</p>
+                         <p>${item.isi || ''}</p>
+                         ${item.gambar ? `<img src="${item.gambar}" style="width:100%; height:180px; object-fit:contain; background:#f8f9fa;" />` : ''}
+                       </div>
+                     </div>`;
+          });
+        }
         document.getElementById("container-berita").innerHTML = html;
-      })
-      .catch(error => console.error("Gagal memuat berita:", error));
+      },
+      error: function(jqXHR, textStatus, errorThrown) {
+        console.error("Gagal memuat berita:", textStatus, errorThrown);
+      }
+    });
   }
 
   // Jalankan saat halaman dibuka
