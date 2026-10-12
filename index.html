@@ -19,7 +19,6 @@
 
   <?!= include("Style"); ?>
 </head>
-
 <body>
   <!-- ===== TOP NAVIGATION NAVBAR ===== -->
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow">
@@ -229,9 +228,11 @@
             <div class="mb-2"><label class="form-label"><i class="bi bi-chat-text text-primary"></i> Deskripsi</label><textarea id="deskripsi" class="form-control" rows="2" placeholder="Keterangan opsional"></textarea></div>
           </form>
         </div>
-        <div class="modal-footer py-2"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-primary" id="btnSimpan">Simpan Transaksi</button></div>
-       <button type="button" class="btn btn-primary" onclick="eksekusiSimpanTransaksi()">Simpan Transaksi</button>
-      </div>         
+        <div class="modal-footer py-2">
+  <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+  <!-- Gunakan satu tombol simpan yang memanggil eksekusiSimpanTransaksi() -->
+  <button type="button" class="btn btn-primary" onclick="eksekusiSimpanTransaksi()">Simpan Transaksi</button>
+</div>
       </div>
     </div>
   </div>
