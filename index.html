@@ -286,5 +286,34 @@
   </div>
 
   <?!= include("Script"); ?>
+  <script>
+  // 🔗 Masukkan URL Web App Google Apps Script Anda di sini
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycb... (URL_WEB_APP_ANDA) .../exec";
+
+  // Contoh mengambil data Berita dari Google Sheet ke GitHub
+  function muatDataBerita() {
+    fetch(SCRIPT_URL + "?action=getBerita")
+      .then(response => response.json())
+      .then(data => {
+        let html = "";
+        data.forEach(item => {
+          html += `<div class="col-md-4">
+                     <div class="card p-3 shadow-sm">
+                       <h5>${item.judul}</h5>
+                       <p>${item.isi}</p>
+                       <img src="${item.gambar}" style="width:100%; object-fit:contain;" />
+                     </div>
+                   </div>`;
+        });
+        document.getElementById("container-berita").innerHTML = html;
+      })
+      .catch(error => console.error("Gagal memuat berita:", error));
+  }
+
+  // Jalankan saat halaman dibuka
+  window.onload = function() {
+    muatDataBerita();
+  };
+</script>
 </body>
 </html>
