@@ -1,0 +1,1596 @@
+<script>
+let dataTransaksi = [];
+let dataReferensi = {};
+let datatableUtama, datatableDetail, datatableWarga, datatableSurat;
+let isPengurus = false;
+
+$(document).core = true;
+
+// ==========================================
+// 🚀 INITIALIZATION SYSTEM (DISATUKAN)
+// ==========================================
+$(document).ready(function() {
+  bukaMenu('beranda');
+  muatBerita();
+  muatLayananSurat();
+  muatLayananSurat();
+  muatRingkasanKasBeranda(); // Fungsi baru untuk memuat kas di beranda umum
+});
+
+$(document).ready(function() {
+  // Panggil fungsi muat tabel berita sesaat setelah halaman selesai dimuat browser
+  if (typeof muatTabelBerita === 'function') {
+    muatTabelBerita();
+  }
+});
+
+// Navigation System
+function bukaMenu(menuName) {
+  $('.menu-content').addClass('d-none');
+  $('.navbar-nav .nav-link').removeClass('active');
+  $(`#menu-${menuName}`).removeClass('d-none');
+  $(`#nav-${menuName}`).addClass('active');
+  
+  if(menuName === 'laporan') { initLaporanKeuangan(); }
+  if(menuName === 'warga') { initTabelWarga(); }
+}
+
+// Authentication Verification
+function mintaAksesPengurus() {
+  if (isPengurus) {
+    tampilkanMenuPengurusLengkap();
+    return;
+  }
+  
+  Swal.fire({
+    title: 'Akses Terbatas Pengurus',
+    input: 'password',
+    inputLabel: 'Masukkan PIN Pengurus RT/RW',
+    inputPlaceholder: 'Ketik PIN Anda...',
+    showCancelButton: true,
+    confirmButtonText: 'Verifikasi',
+    cancelButtonText: 'Batal'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      google.script.run.withSuccessHandler(function(valid) {
+        if(valid) {
+          isPengurus = true;
+          Swal.fire('Berhasil!', 'Akses pengurus dikonfirmasi.', 'success');
+          tampilkanMenuPengurusLengkap();
+        } else {
+          Swal.fire('Gagal!', 'PIN salah, Anda tidak memiliki hak akses.', 'error');
+        }
+      }).cekPinPengurus(result.value);
+    }
+  });
+}
+
+function tampilkanMenuPengurusLengkap() {
+  $('#statusPengurusBadge').removeClass('d-none');
+  $('.btn-pengurus-item').removeClass('d-none');
+  
+  if ($('#nav-warga').length === 0) {
+    $('.navbar-nav').prepend(`
+      <li class="nav-item init-pengurus"><a class="nav-link" id="nav-warga" href="#" onclick="bukaMenu('warga')"><i class="bi bi-people"></i> Data Warga</a></li>
+      <li class="nav-item init-pengurus"><a class="nav-link" id="nav-laporan" href="#" onclick="bukaMenu('laporan')"><i class="bi bi-cash-coin"></i> Lap. Keuangan (LPJ)</a></li>
+    `);
+  }
+  bukaMenu('warga');
+}
+
+function keluarModePengurus() {
+  isPengurus = false;
+  $('#statusPengurusBadge').addClass('d-none');
+  $('.btn-pengurus-item').addClass('d-none');
+  $('.init-pengurus').remove();
+  bukaMenu('beranda');
+}
+
+// ==========================================
+// 🏠 CORE BERANDA & BERITA LOGIC
+// ==========================================
+function muatBerita() {
+  $('#container-berita').html('<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>');
+  google.script.run.withSuccessHandler(function(res) {
+    let html = '';
+    if (!res || res.length === 0) {
+      html = `<div class="col-12 text-center text-muted py-5"><i class="bi bi-chat-left-dots fs-1"></i><p class="mt-2">Belum ada pengumuman/berita warga.</p></div>`;
+    } else {
+      res.forEach(item => {
+        // PERBAIKAN: Berikan toleransi pengecekan jika properti bernama gambarUrl atau gambar
+        let srcGambar = item.gambarUrl || item.gambar || 'https://placehold.co/600x400?text=Tanpa+Foto';
+        
+        html += `
+          <div class="col-md-4 mb-4">
+            <div class="card h-100 shadow-sm border-0 bg-light rounded-3 overflow-hidden">
+              <img src="${srcGambar}" class="card-img-top object-fit-cover" style="height:300px" alt="Gambar Informasi" onerror="this.onerror=null; this.src='https://placehold.co/600x400?text=Pending/Rusak';">
+              <div class="card-body">
+                <span class="badge bg-secondary mb-2">${item.tanggal || '-'}</span>
+                <h5 class="card-title fw-bold text-primary">${item.judul || '-'}</h5>
+                <p class="card-text text-truncate-3">${item.isi || '-'}</p>
+              </div>
+            </div>
+          </div>`;
+      });
+    }
+    $('#container-berita').html(html);
+  }).getBerita();
+}
+
+// Logika Form Berita Submit
+$('#formBerita').submit(function(e) {
+  e.preventDefault();
+  
+  Swal.fire({ 
+    title: 'Memproses Penerbitan...', 
+    text: 'Sedang memvalidasi dan mengompresi gambar...',
+    allowOutsideClick: false, 
+    didOpen: () => { Swal.showLoading(); } 
+  });
+  
+  let dataFinal = { 
+    tanggal: new Date().toISOString().split('T')[0],
+    judul: $('#judulBerita').val(), 
+    isi: $('#isiBerita').val(),
+    gambarUrl: "" 
+  };
+  
+  let elemenGambar = document.getElementById('gambarBerita');
+  
+  if (elemenGambar && elemenGambar.files && elemenGambar.files.length > 0) {
+    let fileFoto = elemenGambar.files[0]; 
+
+    if (fileFoto.size > 10 * 1024 * 1024) {
+      Swal.close();
+      Swal.fire('Ukuran Terlalu Besar!', 'Maksimal ukuran gambar berita adalah 10MB.', 'warning');
+      return;
+    }
+
+    let reader = new FileReader();
+    reader.onload = function(event) {
+      let img = new Image();
+      img.onload = function() {
+        try {
+          let canvas = document.createElement('canvas');
+          let ctx = canvas.getContext('2d');
+          let max_size = 1200;
+          let width = img.width;
+          let height = img.height;
+          
+          if (width > height) {
+            if (width > max_size) { height *= max_size / width; width = max_size; }
+          } else {
+            if (height > max_size) { width *= max_size / height; height = max_size; }
+          }
+          
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          let dataUrlKompresi = canvas.toDataURL('image/jpeg', 0.7);
+          let base64Murni = dataUrlKompresi.substring(dataUrlKompresi.indexOf(',') + 1);
+          
+          let formObj = { 
+            content: base64Murni, 
+            type: 'image/jpeg', 
+            name: 'BERITA_' + Date.now() + '.jpg' 
+          };
+          
+          google.script.run.withSuccessHandler(function(uploadRes) {
+            if(uploadRes && uploadRes.success && uploadRes.url) {
+              let fileId = "";
+              let matches = uploadRes.url.match(/[\w-]{25,}/);
+              if (matches && matches.length > 0) {
+                fileId = matches[0];
+                dataFinal.gambarUrl = "https://drive.google.com/thumbnail?id=" + fileId + "&sz=s4000";
+              } else {
+                dataFinal.gambarUrl = uploadRes.url;
+              }
+              simpanKontenBerita(dataFinal); // Dialihkan ke fungsi simpan terpusat
+            } else {
+              Swal.close();
+              Swal.fire('Gagal Upload!', (uploadRes ? uploadRes.message : 'Respons Drive kosong'), 'error');
+            }
+          }).withFailureHandler(function(err) {
+            Swal.close();
+            Swal.fire('Gagal!', 'Akses folder Drive ditolak: ' + err.message, 'error');
+          }).uploadFileToDrive(formObj);
+
+        } catch (errKanvas) {
+          Swal.close();
+          Swal.fire('Error Kanvas!', errKanvas.message, 'error');
+        }
+      };
+      img.onerror = function() {
+        Swal.close();
+        Swal.fire('Berkas Rusak!', 'Gambar tidak bisa dimuat oleh browser.', 'error');
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(fileFoto);
+  } else {
+    simpanKontenBerita(dataFinal);
+  }
+});
+
+// Fungsi kedua: Menjembatani perekaman data teks ke tab BeritaWarga
+function eksekusiKirimKeSheets(dataBeritaUtamanya) {
+  google.script.run.withSuccessHandler(function(res) {
+    // MATIKAN ANIMASI LOADING PAKSA DETIK INI JUGA!
+    Swal.close(); 
+
+    if (res && res.success) {
+      Swal.fire('Berhasil!', 'Berita warga berhasil diterbitkan.', 'success');
+      
+      // Mengosongkan form menggunakan index reset murni javascript
+      document.getElementById('formBerita').reset(); 
+      
+      // Tutup modal popup berita jika form dibungkus modal Bootstrap
+      if ($('#beritaModal').length) { $('#beritaModal').modal('hide'); }
+      
+      // Muat ulang isi tabel berita Anda agar data barunya langsung muncul di layar web
+      if (typeof muatTabelBerita === 'function') { muatTabelBerita(); }
+    } else {
+      Swal.fire('Gagal Menyimpan!', (res ? res.message : 'Gagal mengirim data balik'), 'error');
+    }
+  }).withFailureHandler(function(err) {
+    Swal.close(); // Matikan loading jika koneksi internet drop
+    Swal.fire('Gagal Jaringan!', 'Komunikasi spreadsheet terputus: ' + err.message, 'error');
+  }).tambahBeritaKeSheet(dataBeritaUtamanya); 
+}
+
+// Fungsi kedua: Mengirimkan data teks dan link gambar final ke Google Sheets
+function simpanKontenBerita(dataFinalObj) {
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.success) {
+        Swal.update({
+          title: 'Sinkronisasi Sistem...',
+          text: 'Sedang memuat ulang mading informasi warga...',
+          icon: 'info'
+        });
+        
+        document.getElementById('formBerita').reset(); 
+        if ($('#beritaModal').length) { $('#beritaModal').modal('hide'); }
+        
+        setTimeout(function() {
+          Swal.close();
+          Swal.fire({
+            icon: 'success',
+            title: 'Berhasil Diterbitkan!',
+            timer: 1500,
+            showConfirmButton: false
+          });
+
+          muatBerita(); // Panggil muatBerita agar kartu terupdate realtime
+          if (typeof muatTabelBerita === 'function') { muatTabelBerita(); }
+        }, 1500);
+
+      } else {
+        Swal.close();
+        Swal.fire('Gagal Menyimpan!', res.message || 'Terjadi kesalahan.', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      Swal.close();
+      Swal.fire('Gagal Jaringan!', 'Komunikasi spreadsheet terputus: ' + err.message, 'error');
+    })
+    .tambahBeritaKeSheet(dataFinalObj); 
+}
+
+function konfirmasiHapusBerita(id) {
+  Swal.fire({
+    title: 'Hapus Berita Ini?',
+    text: "Data informasi berita warga akan dihapus selamanya dari sistem!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: 'Ya, Hapus!'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.fire({ title: 'Menghapus Berita...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+      
+      // Menembak fungsi hapusBeritaDariSheet yang berada di file Kode.gs
+      google.script.run.withSuccessHandler(function(res) {
+        Swal.close();
+        if (res && res.success) {
+          Swal.fire('Terhapus!', res.message, 'success');
+          muatTabelBerita(); // Refresh tabel admin otomatis tanpa reload web
+          muatBerita();      // Refresh mading depan warga otomatis
+        } else {
+          Swal.fire('Gagal!', res.message, 'error');
+        }
+      }).hapusBeritaDariSheet(id);
+    }
+  });
+}
+
+
+function muatLayananSurat() {
+  google.script.run.withSuccessHandler(function(dataSurat) {
+    // Pengaman: Jika data yang kembali dari server bukan array/kosong
+    if (!dataSurat || !Array.isArray(dataSurat)) {
+      console.error("Data surat dari server tidak valid.");
+      return;
+    }
+
+    if (datatableSurat) { 
+      datatableSurat.destroy(); 
+    }
+    
+    datatableSurat = $('#tabelSurat').DataTable({
+      data: dataSurat,
+      columns: [
+        { data: 'id', title: 'ID', defaultContent: '-' },
+        { data: 'tanggal', title: 'Tgl Pengajuan', defaultContent: '-' },
+        { data: 'nama', title: 'Nama Warga', defaultContent: '-' },
+        { data: 'nik', title: 'NIK', defaultContent: '-' },
+        { data: 'alamat', title: 'Alamat Rumah', defaultContent: '-' },
+        { data: 'jenis', title: 'Jenis Surat', defaultContent: '-' },
+        { data: 'keterangan', title: 'Keperluan', defaultContent: '-' },
+        { 
+          data: 'status', title: 'Status',
+          render: function(d) {
+            // ANTI-HANG: Amankan jika data status bernilai null/undefined
+            let teksStatus = d ? d.toString().trim() : 'Pending';
+            let statusLower = teksStatus.toLowerCase();
+            
+            let color = 'warning'; // Kuning untuk pending
+            if (statusLower === 'disetujui' || statusLower === 'success') {
+              color = 'success'; // Hijau jika disetujui
+            }
+            
+            return `<span class="badge bg-${color}">${teksStatus}</span>`;
+          }
+        },
+        {
+          data: null, title: 'Aksi / Cetak',
+          render: function(data, type, row) {
+            // ANTI-HANG: Amankan objek baris (row) agar tidak memacetkan browser
+            if (!row) return '-';
+
+            let btnAdmin = '';
+            let btnPrint = '';
+            
+            // Tangkap nilai status secara aman
+            let statusBersih = row.status ? row.status.toString().trim().toLowerCase() : 'pending';
+            // Tangkap nilai ID secara aman
+            let idSurat = row.id ? row.id.toString() : '';
+            
+            // PAKSA TOMBOL SETUJUI MUNCUL: Jika status masih pending atau kosong
+            if (statusBersih === 'pending' || statusBersih === '') {
+              btnAdmin = `<button type="button" class="btn btn-sm btn-outline-success me-1" onclick="accSurat('${idSurat}')"><i class="bi bi-check-lg"></i> Setujui</button>`;
+            }
+            
+            // TOMBOL CETAK MUNCUL: Jika status sudah disetujui
+            if (statusBersih === 'disetujui' || statusBersih === 'success') {
+              btnPrint = `<button type="button" class="btn btn-sm btn-dark" onclick="cetakSuratBerdasarId('${idSurat}')"><i class="bi bi-printer"></i> Cetak</button>`;
+            } else {
+              // Jika status pending dan tombol admin karena hal lain tidak muncul
+              if (!btnAdmin) btnPrint = '<span class="text-muted">Menunggu ACC</span>';
+            }
+            
+            return btnAdmin + btnPrint;
+          }
+        }
+      ]
+    });
+  }).getSurat();
+}
+
+$(document).off('submit', '#formSurat').on('submit', '#formSurat', function(e) {
+  e.preventDefault();
+  
+  // Tampilkan loading agar user tidak klik berkali-kali
+  Swal.fire({
+    title: 'Mengirim Pengajuan...',
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  // Susun data dengan toleransi selector ID (jika ada perbedaan huruf besar/kecil di HTML)
+  let payloadSurat = {
+    tanggal: new Date().toISOString().split('T')[0], // Format: YYYY-MM-DD
+    nama: $('#suratNama').val() || $('#namaWarga').val() || $('#nama').val() || "",
+    nik: $('#suratNik').val() || $('#nikWarga').val() || $('#nik').val() || "",
+    alamat: $('#suratAlamat').val() || $('#alamatWarga').val() || $('#alamat').val() || "",
+    jenis: $('#suratJenis').val() || $('#jenisSurat').val() || $('#jenis').val() || "",
+    keterangan: $('#suratKet').val() || $('#keperluan').val() || $('#keterangan').val() || ""
+  };
+
+  // Kirim ke server
+  google.script.run
+    .withSuccessHandler(function(res) {
+      Swal.close();
+      if (res.success) {
+        Swal.fire('Sukses!', res.message || 'Pengajuan surat berhasil dikirim!', 'success');
+        $('#formSurat')[0].reset();
+        if (typeof muatLayananSurat === 'function') muatLayananSurat();
+      } else {
+        Swal.fire('Gagal', res.message || 'Terjadi kesalahan sistem.', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      Swal.close();
+      Swal.fire('Eror Sistem', err.message, 'error');
+    })
+    .ajukanSurat(payloadSurat); // Mengirim payloadSurat yang sudah aman
+});
+
+function accSurat(id) {
+  google.script.run.withSuccessHandler(function(res) {
+    Swal.fire('Disetujui!', res.message, 'success');
+    muatLayananSurat();
+  }).updateStatusSurat(id, 'Disetujui');
+}
+
+function cetakSurat(data) {
+  // Tambahkan 'about:blank' di dalam window.open agar beberapa browser tidak menampilkan url teks mentah
+  let w = window.open('about:blank', '_blank');
+  
+  let html = `
+    <html>
+    <head>
+      <!-- Judul dikosongkan agar tidak muncul di cetakan -->
+      <title></title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; }
+        .kopsurat { text-align: center; border-bottom: 3px double #000; padding-bottom: 10px; margin-bottom: 30px; }
+        .judul { text-align: center; text-decoration: underline; font-weight: bold; margin-bottom: 25px; font-size: 18px; }
+        .content { margin-bottom: 30px; }
+        .ttd-box { float: right; text-align: center; margin-top: 50px; width: 200px; }
+        
+        /* Trik CSS untuk menyembunyikan tulisan about:blank / URL / Judul di kertas cetak */
+        @media print {
+          @page { 
+            margin-top: 20px;
+            margin-bottom: 20px;
+          }
+          body { 
+            padding: 20px; 
+          }
+        }
+      </style>
+    </head>
+    <body onload="window.print(); window.close();">
+      <div class="kopsurat">
+        <h2>PENGURUS RUKUN TETANGGA 10 / RW 25</h2>
+        <p>Kelurahan Cilame, Kecamatan Ngamprah - Kab.Bandung Barat 40552</p>
+      </div>
+      <div class="judul">SURAT PENGANTAR / KETERANGAN</div>
+      <div class="content">
+        <p>Yang bertanda tangan di bawah ini Pengurus RT 10 / RW 25 menyatakan bahwa:</p>
+        <table style="margin-left: 20px; margin-bottom: 20px;">
+          <tr><td width="150">Nama Lengkap</td><td>: <b>${data.nama}</b></td></tr>
+          <tr><td>NIK KTP</td><td>: ${data.nik}</td></tr>
+          <tr><td>Alamat Rumah</td><td>: ${data.alamat}</td></tr>
+          <tr><td>Jenis Layanan</td><td>: ${data.jenis}</td></tr>
+          <tr><td>Keperluan / Ket</td><td>: ${data.keterangan}</td></tr>
+        </table>
+        <p>Orang tersebut di atas adalah benar warga kami yang berdomisili di lingkungan RT 10 / RW 25. Surat pengantar ini dibuat untuk dapat dipergunakan sebagaimana mestinya.</p>
+      </div>
+      <div class="ttd-box">
+        <p>Cilame, ${data.tanggal}</p>
+        <p style="margin-bottom: 70px;">Ketua RT 10 / RW 25</p>
+        <p><b>( _________________ )</b></p>
+      </div>
+    </body>
+    </html>
+  `;
+  w.document.write(html);
+  w.document.close();
+}
+
+// Fungsi baru sebagai jembatan pembaca data baris tabel secara instan
+function cetakSuratBerdasarId(idSurat) {
+  // Ambil data baris langsung dari instansi DataTables yang sedang aktif
+  var semuaData = $('#tabelSurat').DataTable().rows().data().toArray();
+  
+  // Cari data warga yang memiliki ID surat tersebut
+  var dataWarga = semuaData.find(item => item.id == idSurat);
+  
+  if (dataWarga) {
+    // Lempar data ke fungsi cetakSurat bawaan Anda yang sudah ada
+    cetakSurat(dataWarga);
+  } else {
+    Swal.fire('Gagal', 'Data surat tidak ditemukan di tabel.', 'error');
+  }
+}
+// ==========================================
+// 👥 DATA WARGA LOGIC
+// ==========================================
+function initTabelWarga() {
+  google.script.run.withSuccessHandler(function(wargas) {
+    if(datatableWarga) { datatableWarga.destroy(); }
+    datatableWarga = $('#tabelWarga').DataTable({
+      data: wargas,
+      columns: [
+        { data: 'nik', title: 'NIK' },
+        { data: 'nama', title: 'Nama Lengkap' },
+        { data: 'alamat', title: 'Alamat Rumah' },
+        { data: 'hp', title: 'No. WhatsApp' },
+        { data: 'status', title: 'Hubungan Keluarga' }
+      ]
+    });
+  }).getWarga();
+}
+
+$('#formWarga').submit(function(e) {
+  e.preventDefault();
+  
+  // Tampilkan loading agar tahu proses sedang berjalan
+  Swal.fire({ title: 'Menyimpan Data...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+  let data = { 
+    nik: $('#wargaNik').val(), 
+    nama: $('#wargaNama').val(), 
+    hp: $('#wargaHp').val(), 
+    alamat: $('#wargaAlamat').val(), 
+    status: $('#wargaStatus').val() 
+  };
+
+  google.script.run.withSuccessHandler(function(res) {
+    Swal.fire('Berhasil!', res.message, 'success');
+    $('#wargaModal').modal('hide');
+    $('#formWarga')[0].reset();
+    initTabelWarga(); // Muat ulang tabel warga
+  }).withFailureHandler(function(err) {
+    Swal.fire('Gagal!', 'Terjadi kesalahan: ' + err.message, 'error');
+  }).tambahWarga(data);
+});
+
+// ==========================================
+// 📑 DATA LAPORAN PERTANGGUNGJAWABAN KEUANGAN
+// ==========================================
+function initLaporanKeuangan() {
+  // Ambil Dropdown Referensi Sekali Saja
+  google.script.run.withSuccessHandler(function(ref) {
+    dataReferensi = ref;
+    let optJenis = '<option value="" disabled selected>Pilih jenis</option>';
+    Object.keys(ref.kategoriPerJenis).forEach(j => { optJenis += `<option value="${j}">${j}</option>`; });
+    $('#jenis').html(optJenis);
+    
+    let optMetode = '<option value="" disabled selected>Pilih metode</option>';
+    ref.metode.forEach(m => { optMetode += `<option value="${m}">${m}</option>`; });
+    $('#metode').html(optMetode);
+  }).getReferensi();
+
+  refreshDataKeuangan();
+}
+
+function refreshDataKeuangan() {
+  google.script.run.withSuccessHandler(function(transaksi) {
+    dataTransaksi = transaksi;
+    renderTabelUtama(transaksi);
+    updateSummaryModal(transaksi);
+  }).getTransaksi();
+}
+
+$('#jenis').change(function() {
+  let j = $(this).val();
+  let opt = '<option value="" disabled selected>Pilih kategori</option>';
+  if(dataReferensi.kategoriPerJenis[j]) {
+    dataReferensi.kategoriPerJenis[j].forEach(k => { opt += `<option value="${k}">${k}</option>`; });
+  }
+  $('#kategori').html(opt);
+});
+
+function renderTabelUtama(transaksi) {
+  // SOLUSI UTAMA: Hancurkan (destroy) tabel lama jika sudah pernah diinisialisasi
+  // Ini akan mencegah munculnya error "Cannot reinitialise DataTable" selamanya.
+  if ($.fn.dataTable.isDataTable('#tabelData')) {
+    $('#tabelData').DataTable().destroy();
+    $('#tabelData').empty(); // Bersihkan sisa elemen HTML lama agar tidak duplikat
+  }
+
+  // Setel ulang struktur tabel baru secara bersih
+  datatableUtama = $('#tabelData').DataTable({
+    data: transaksi,
+    columns: [
+      { data: 'id', title: 'ID', visible: false },
+      { data: 'tanggal', title: 'Tanggal' }, // Kolom tanggal (Indeks 1)
+      { data: 'jenis', title: 'Jenis' },
+      { data: 'kategori', title: 'Kategori' },
+      { data: 'jumlah', title: 'Jumlah (Rp)' },
+      { data: 'metode', title: 'Metode' },
+      { data: 'deskripsi', title: 'Deskripsi' }
+    ],
+    order: [[1, 'desc']], // Urutkan otomatis dari tanggal paling baru
+    pageLength: 10
+  });
+}
+
+// Format input angka Rupiah otomatis
+$('#jumlah').on('keyup', function() {
+  let val = $(this).val().replace(/[^0-9]/g, '');
+  $(this).val(val ? Number(val).toLocaleString('id-ID') : '');
+});
+
+$('#btnSimpan').click(function() {
+  let id = $('#idTransaksi').val();
+  let jmlStr = $('#jumlah').val().replace(/\./g, '');
+  let data = {
+    id: id,
+    tanggal: $('#tanggal').val(),
+    jenis: $('#jenis').val(),
+    kategori: $('#kategori').val(),
+    jumlah: Number(jmlStr),
+    metode: $('#metode').val(),
+    deskripsi: $('#deskripsi').val()
+  };
+
+  if(!data.tanggal || !data.jenis || !data.kategori || !data.jumlah || !data.metode) {
+    Swal.fire('Lengkapi Formulir!', 'Semua kolom bertanda harus diisi.', 'warning');
+    return;
+  }
+
+  Swal.fire({ title: 'Menyimpan Catatan...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+  let fileInput = $('#fileUpload')[0].files[0];
+  if(fileInput) {
+    let reader = new FileReader();
+    reader.onload = function(e) {
+      let formObj = { content: e.target.result.split(',')[1], type: fileInput.type, name: fileInput.name };
+      google.script.run.withSuccessHandler(function(upRes) {
+        if(upRes.success) {
+          data.fileUrl = upRes.url;
+          eksekusiSimpan(data, id);
+        } else {
+          Swal.fire('Upload Gagal!', upRes.message, 'error');
+        }
+      }).uploadFileToDrive(formObj);
+    };
+    reader.readAsDataURL(fileInput);
+  } else {
+    eksekusiSimpan(data, id);
+  }
+});
+
+/* =========================================================
+     📊 LOAD DATA TABLE - TANPA BUTTONS EXPORT
+     ========================================================= */
+  function loadData() {
+    return new Promise((resolve) => {
+      console.log('loadData() started...');
+      google.script.run.withSuccessHandler((data = []) => {
+        console.log('Data received:', data.length, 'rows');
+        
+        if (dataTable) {
+          dataTable.clear().destroy();
+        }
+
+        const dtData = data.map(r => [
+          r.id, r.tanggal, r.jenis, r.kategori, r.jumlah, r.metode, r.deskripsi, r.file,
+          `
+            <button class='btn btn-sm btn-warning btn-transparent me-1' onclick='editData(${r.id})'>
+              <i class='bi bi-pencil-square'></i>
+            </button>
+            <button class='btn btn-sm btn-danger btn-transparent' onclick='deleteData(${r.id})'>
+              <i class='bi bi-trash'></i>
+            </button>
+          `
+        ]);
+
+        console.log('Initializing DataTable...');
+        
+        // TANPA buttons export - menggunakan tombol custom
+        dataTable = $('#tabelData').DataTable({
+          data: dtData,
+          columns: [
+            { title: "ID" },
+            { title: "Tanggal" },
+            { title: "Jenis" },
+            { title: "Kategori" },
+            {
+              title: "Jumlah (Rp)",
+              render: (data, type) => (type === 'display' || type === 'filter') ? formatRibuan(data) : data
+            },
+            { title: "Metode" },
+            { title: "Deskripsi" },
+            { 
+              title: "File",
+              render: (data, type) => data ? `<a href="${data}" target="_blank">Lihat File</a>` : "-"
+            },
+            { title: "Aksi", orderable: false }
+          ],
+          // Hapus bagian buttons dan dom yang berhubungan dengan buttons
+          dom: '<"row"<"col-sm-6"l><"col-sm-6"f>>' +
+               '<"row"<"col-sm-12"tr>>' +
+               '<"row"<"col-sm-5"i><"col-sm-7"p>>',
+          language: { 
+            search: "_INPUT_", 
+            searchPlaceholder: "Cari...", 
+            paginate: { previous: "<", next: ">" }, 
+            lengthMenu: "_MENU_ Baris",
+            info: "Menampilkan _START_ s.d _END_ dari _TOTAL_ data",
+            infoEmpty: "Menampilkan 0 sampai 0 dari 0 data",
+            zeroRecords: "Tidak ada data yang cocok",
+            infoFiltered: "(difilter dari _MAX_ total data)"
+          },
+          pageLength: 15,
+          responsive: true,
+          destroy: true,
+          footerCallback: updateFooter,
+          initComplete: function() {
+            console.log('DataTable initialization complete!');
+          }
+        });
+
+        resolve();
+      }).getTransaksi();
+    });
+  }
+
+/* =========================================================
+     🧮 UPDATE FOOTER TOTAL
+     ========================================================= */
+  function updateFooter() {
+    // Cukup panggil ini untuk menyembunyikan komponen secara total
+    $('#totalInfo').hide();
+  }
+
+  /* =========================================================
+     🧼 FORM HANDLERS
+     ========================================================= */
+  function resetForm() {
+    $("#transaksiForm")[0].reset();
+    $("#idTransaksi").val('');
+    $("#jenis").val('').trigger('change');
+    $("#kategori").html('<option value="" disabled selected hidden>Pilih Kategori</option>');
+    $("#metode").val('');
+    $("#transaksiForm select").removeClass("is-invalid is-valid");
+  }
+
+function eksekusiSimpan(data, id) {
+  let fungsi = id ? 'updateTransaksi' : 'tambahTransaksi';
+  google.script.run.withSuccessHandler(function(res) {
+    Swal.fire('Sukses!', res.message, 'success');
+    $('#formModal').modal('hide');
+    $('#transaksiForm')[0].reset();
+    $('#idTransaksi').val('');
+    refreshDataKeuangan();
+  })[fungsi](data);
+}
+
+function editTransaksi(row) {
+  $('#idTransaksi').val(row.id);
+  $('#tanggal').val(row.tanggal);
+  $('#jenis').val(row.jenis).trigger('change');
+  setTimeout(() => { $('#kategori').val(row.kategori); }, 300);
+  $('#jumlah').val(Number(row.jumlah).toLocaleString('id-ID'));
+  $('#metode').val(row.metode);
+  $('#deskripsi').val(row.deskripsi);
+  $('#formModal').modal('show');
+}
+
+// =======================================================
+// FUNGSI BARU: HITUNG & TAMPILKAN KAS DI BERANDA UMUM
+// =======================================================
+function muatRingkasanKasBeranda() {
+  google.script.run.withSuccessHandler(function(transaksi) {
+    if (!transaksi || transaksi.length === 0) {
+      console.log("Data transaksi keuangan masih kosong.");
+      return;
+    }
+
+    let masuk = 0, keluar = 0;
+    
+    transaksi.forEach(r => {
+      // Menyamakan format teks jenis transaksi
+      let jenis = r.jenis ? r.jenis.toString().trim().toLowerCase() : '';
+      let jumlah = Number(r.jumlah) || 0;
+      
+      // DISESUAIKAN: Sekarang sistem mengenali kata 'pendapatan' dan 'pengeluaran'
+      if (jenis === 'pendapatan' || jenis === 'masuk') {
+        masuk += jumlah;
+      } else if (jenis === 'pengeluaran' || jenis === 'keluar') {
+        keluar += jumlah;
+      }
+    });
+    
+    // Tampilkan hasilnya ke 3 kartu di Beranda
+    $('#berandaPendapatan').text('Rp ' + masuk.toLocaleString('id-ID'));
+    $('#berandaPengeluaran').text('Rp ' + keluar.toLocaleString('id-ID'));
+    $('#berandaSaldo').text('Rp ' + (masuk - keluar).toLocaleString('id-ID'));
+  }).withFailureHandler(function(err) {
+    console.error("Gagal mengambil data kas untuk beranda: " + err.message);
+  }).getTransaksi();
+}
+
+function hapusTransaksiKonf(id) {
+  Swal.fire({
+    title: 'Hapus Transaksi?',
+    text: "Tindakan ini akan menghapus permanen data kas & file nota terkait!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    confirmButtonText: 'Ya, Hapus'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      google.script.run.withSuccessHandler(function(res) {
+        Swal.fire('Dihapus!', res.message, 'success');
+        refreshDataKeuangan();
+      }).hapusTransaksi(id);
+    }
+  });
+}
+
+function updateSummaryModal(data) {
+  // 1. Ambil nilai filter tanggal langsung dari elemen di dalam modal Anda
+  var tglMulaiStr = $('#tglAwal').val() || "";
+  var tglSelesaiStr = $('#tglAkhir').val() || "";
+
+  var tanggalMin = tglMulaiStr ? new Date(tglMulaiStr + "T00:00:00") : null;
+  var tanggalMax = tglSelesaiStr ? new Date(tglSelesaiStr + "T23:59:59") : null;
+
+  if (tanggalMin) tanggalMin.setHours(0,0,0,0);
+  if (tanggalMax) tanggalMax.setHours(0,0,0,0);
+
+  // 2. Saring data transaksi berdasarkan rentang tanggal yang dipilih user
+  var dataTersaring = data.filter(function(item) {
+    if (!item.tanggal) return false;
+    
+    // Ubah tanggal dari data baris ke Objek Tanggal JavaScript
+    var tglItem = new Date(item.tanggal);
+    if (isNaN(tglItem.getTime())) return false;
+    tglItem.setHours(0,0,0,0);
+
+    var waktuItem = tglItem.getTime();
+    var waktuMin = tanggalMin ? tanggalMin.getTime() : null;
+    var waktuMax = tanggalMax ? tanggalMax.getTime() : null;
+
+    if (waktuMin && waktuItem < waktuMin) return false; // Sembunyikan jika kurang dari tanggal awal
+    if (waktuMax && waktuItem > waktuMax) return false; // Sembunyikan jika melebihi tanggal akhir
+
+    return true; // Lolos filter rentang waktu
+  });
+
+  // 3. Hitung total Pendapatan, Pengeluaran, dan Saldo dari data yang sudah disaring
+  var totalPendapatan = 0;
+  var totalPengeluaran = 0;
+
+  dataTersaring.forEach(function(item) {
+    var jumlah = Number(item.jumlah) || 0;
+    // PENTING: Sesuaikan kata 'Pendapatan' atau 'Pemasukan' sesuai isi data spreadsheet Anda
+    if (item.jenis === 'Pendapatan' || item.jenis === 'Pemasukan') {
+      totalPendapatan += jumlah;
+    } else if (item.jenis === 'Pengeluaran') {
+      totalPengeluaran += jumlah;
+    }
+  });
+
+  var sisaSaldo = totalPendapatan - totalPengeluaran;
+
+  // 4. Update teks di kartu angka (Card HTML) modal Anda
+  $('#cardPendapatan').text('Rp ' + totalPendapatan.toLocaleString('id-ID'));
+  $('#cardPengeluaran').text('Rp ' + totalPengeluaran.toLocaleString('id-ID'));
+  $('#cardSaldo').text('Rp ' + sisaSaldo.toLocaleString('id-ID'));
+
+  // 5. Gambar ulang tabel detail (#detailTable) agar tidak reinitialise error
+  if ($.fn.dataTable.isDataTable('#detailTable')) {
+    $('#detailTable').DataTable().destroy();
+    $('#detailTable').empty(); 
+  }
+
+  $('#detailTable').DataTable({
+    data: dataTersaring,
+    columns: [
+      { data: 'tanggal', title: 'Tanggal' },
+      { data: 'jenis', title: 'Jenis' },
+      { data: 'kategori', title: 'Kategori' },
+      { 
+        data: 'jumlah', 
+        title: 'Jumlah (Rp)',
+        render: function(val) { return 'Rp ' + Number(val).toLocaleString('id-ID'); }
+      },
+      { data: 'metode', title: 'Metode' },
+      { data: 'deskripsi', title: 'Deskripsi' }
+    ],
+    order: [[0, 'desc']],
+    pageLength: 5
+  });
+}
+
+// Export Excel Client-Side SheetJS
+$('#btnExport').click(function() {
+  if(dataTransaksi.length === 0) return Swal.fire('Kosong!', 'Tidak ada data untuk di-export', 'info');
+  let ws = XLSX.utils.json_to_sheet(dataTransaksi);
+  let wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Laporan_Kas_RT");
+  XLSX.writeFile(wb, "Laporan_Kas_RT_RW.xlsx");
+});
+
+/* =========================================================
+     🔍 INIT DETAIL MODAL
+     ========================================================= */
+  function initDetailModal() {
+    const modal = $('#detailModal');
+
+    modal.on('show.bs.modal', () => {
+      $("#tglAwal").val('');
+      $("#tglAkhir").val('');
+
+      $("#cardPendapatan").text('0');
+      $("#cardPengeluaran").text('0');
+      $("#cardSaldo").text('0');
+
+      if (detailTableInitialized && detailTable) {
+        detailTable.clear().destroy();
+        detailTableInitialized = false;
+      }
+
+      $("#detailTable").empty();
+    });
+
+    $("#tglAwal, #tglAkhir").on('change', loadDetailData);
+  }
+
+ /* =========================================================
+     🔍 DETAIL MODAL
+     ========================================================= */
+  function loadDetailData() {
+    const tglAwalStr = $("#tglAwal").val();
+    const tglAkhirStr = $("#tglAkhir").val();
+
+    if (!tglAwalStr) return; 
+
+    const tglAwal = new Date(tglAwalStr);
+    tglAwal.setHours(0,0,0,0); 
+
+    let tglAkhir = tglAkhirStr ? new Date(tglAkhirStr) : null;
+    if (tglAkhir) tglAkhir.setHours(23,59,59,999); 
+
+    Swal.fire({
+      title: 'Memuat data...',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    google.script.run.withSuccessHandler((data = []) => {
+
+      const filtered = data.filter(d => {
+        const [y, m, dStr] = d.tanggal.split('-');
+        const tgl = new Date(+y, +m - 1, +dStr);
+        tgl.setHours(12,0,0,0); 
+
+        if (tglAwal && !tglAkhir) return tgl >= tglAwal;
+        if (tglAwal && tglAkhir) return tgl >= tglAwal && tgl <= tglAkhir;
+        return true;
+      });
+
+      if (detailTableInitialized) detailTable.clear().destroy();
+
+      const dtData = filtered.map(r => [r.id, r.tanggal, r.jenis, r.kategori, r.jumlah, r.metode, r.deskripsi, r.file]);
+
+      detailTable = $('#detailTable').DataTable({
+        data: dtData,
+        columns: [
+          { title: 'ID' },
+          { title: 'Tanggal' },
+          { title: 'Jenis' },
+          { title: 'Kategori' },
+          {
+            title: 'Jumlah (Rp)',
+            render: (data, type) => (type === 'display' || type === 'filter') ? formatRibuan(data) : data
+          },
+          { title: 'Metode' },
+          { title: 'Deskripsi' },
+          { 
+            title: "File",
+            render: (data, type) => data ? `<a href="${data}" target="_blank">Lihat File</a>` : "-"
+          }
+        ],
+        pageLength: 5,
+        responsive: true,
+        destroy: true,
+        // Hapus buttons export - menggunakan tombol custom
+        dom: '<"row"<"col-sm-6"l><"col-sm-6"f>>' +
+             '<"row"<"col-sm-12"tr>>' +
+             '<"row"<"col-sm-5"i><"col-sm-7"p>>',
+        language: { 
+          search: "_INPUT_", 
+          searchPlaceholder: "Cari...", 
+          paginate: { previous: "<", next: ">" }, 
+          lengthMenu: "_MENU_ Baris",
+          info: "Menampilkan _START_ s.d _END_ dari _TOTAL_ data",
+          infoEmpty: "Menampilkan 0 sampai 0 dari 0 data",
+          zeroRecords: "Tidak ada data yang cocok",
+          infoFiltered: "(difilter dari _MAX_ total data)"
+        }
+      });
+
+      detailTableInitialized = true;
+
+      const totalIn = filtered.filter(f => f.jenis === 'Pendapatan').reduce((a, b) => a + Number(b.jumlah), 0);
+      const totalOut = filtered.filter(f => f.jenis !== 'Pendapatan').reduce((a, b) => a + Number(b.jumlah), 0);
+      const saldo = totalIn - totalOut;
+
+      $("#cardPendapatan").text(formatRibuan(totalIn));
+      $("#cardPengeluaran").text(formatRibuan(totalOut));
+      $("#cardSaldo").text(formatRibuan(saldo));
+
+      Swal.close();
+
+    }).getTransaksi();
+  }
+
+// ========================================================
+// TOMBOL SIMPAN BERITA (MENGIKUTI POLA TRANSFER TRANSAKSI)
+// ========================================================
+// Variabel global penampung DataTables Berita
+var datatableBerita;
+
+// ==========================================
+// 1. PROSES KLIK TOMBOL SIMPAN FORM BERITA
+// ==========================================
+$(document).on('click', '#btnSimpanBerita', function(e) {
+  e.preventDefault(); // Mengunci browser agar tidak me-refresh halaman web app
+  
+  let id = $('#idBerita').val() || "";
+  let dataBerita = {
+    id: id,
+    tanggal: UtilitiesFormatedDate(),
+    judul: $('#judulBerita').val(),
+    isi: $('#isiBerita').val(),
+    fileUrl: ""
+  };
+
+  // Validasi kolom wajib
+  if (!dataBerita.judul || !dataBerita.isi) {
+    Swal.fire('Lengkapi Formulir!', 'Kolom Judul dan Isi Berita tidak boleh kosong.', 'warning');
+    return;
+  }
+
+  // Tampilkan animasi loading penanda proses dimulai
+  Swal.fire({ 
+    title: 'Menyimpan Berita...', 
+    allowOutsideClick: false, 
+    didOpen: () => { Swal.showLoading(); } 
+  });
+
+  // Ambil elemen file gambar secara aman
+  let inputElem = $('#gambarBerita')[0]; 
+  let fileInput = (inputElem && inputElem.files && inputElem.files.length > 0) ? inputElem.files[0] : null;
+
+  if (fileInput) {
+    let reader = new FileReader();
+    reader.onload = function(evt) {
+      let formObj = { 
+        content: evt.target.result.split(',')[1], 
+        type: fileInput.type, 
+        name: fileInput.name 
+      };
+      
+      // Tahap A: Upload file gambar ke Google Drive terlebih dahulu
+      google.script.run
+        .withSuccessHandler(function(upRes) {
+          if (upRes && upRes.success) {
+            dataBerita.fileUrl = upRes.url; // Simpan link direct view gambar dari server
+            eksekusiSimpanBerita(dataBerita); // Tahap B: Lanjut simpan data teks berita
+          } else {
+            Swal.fire('Upload Gagal!', upRes ? upRes.message : 'Gagal memproses gambar.', 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          Swal.fire('Eror Server Upload', err.message, 'error');
+        })
+        .uploadFileToDrive(formObj);
+    };
+    reader.readAsDataURL(fileInput);
+  } else {
+    // Jika user mengosongkan gambar, langsung eksekusi simpan teks berita saja
+    eksekusiSimpanBerita(dataBerita);
+  }
+});
+
+// ==========================================
+// 💾 FUNGSI SIMPAN/UPDATE BERITA (ANTI-GAGAL)
+// ==========================================
+function eksekusiSimpanBerita() {
+  // Ambil ID dari input tersembunyi (bisa idBerita, id_berita, atau ID)
+  let id = $('#idBerita').val() || $('#id_berita').val() || $('#idTopik').val() || '';
+
+  // Validasi input wajib
+  if (!data.judul || !data.isi) {
+    Swal.fire('Lengkapi Formulir!', 'Judul dan Isi Berita wajib diisi.', 'warning');
+    return;
+  }
+
+  Swal.fire({ 
+    title: 'Menyimpan Berita...', 
+    allowOutsideClick: false, 
+    didOpen: () => { Swal.showLoading(); } 
+  });
+
+  // Cek apakah ada file gambar baru yang diunggah
+  let fileInput = $('#fileUploadBerita')[0] || $('#fileBerita')[0] || $('#fileUpload')[0];
+  let file = fileInput && fileInput.files ? fileInput.files[0] : null;
+
+  if (file) {
+    let reader = new FileReader();
+    reader.onload = function(e) {
+      let formObj = { 
+        content: e.target.result.split(',')[1], 
+        type: file.type, 
+        name: file.name 
+      };
+      
+      // Upload gambar ke Google Drive terlebih dahulu
+      google.script.run.withSuccessHandler(function(upRes) {
+        if (upRes.success || upRes.url) {
+          data.fileUrl = upRes.url; // Simpan URL gambar dari Drive
+          prosesKirimKeServerSheet(data, id);
+        } else {
+          Swal.fire('Upload Gagal!', 'Gagal mengunggah gambar berita.', 'error');
+        }
+      }).uploadFileToDrive(formObj); // Sesuaikan dengan nama fungsi upload Drive Anda
+    };
+    reader.readAsDataURL(file);
+  } else {
+    // Jika tidak ada perubahan gambar, langsung simpan teksnya saja
+    prosesKirimKeServerSheet(data, id);
+  }
+}
+
+// ==========================================
+// 💰 FUNGSI SIMPAN / UPDATE TRANSAKSI KEUANGAN
+// ==========================================
+function eksekusiSimpanTransaksi() {
+  // 1. Ambil ID dari input hidden (untuk membedakan Tambah Baru vs Edit)
+  let id = $('#idTransaksi').val() || $('#id_transaksi').val() || '';
+  
+  // 2. Kumpulkan data dari form modal transaksi
+  let data = {
+    id: id,
+    tanggal: $('#tanggalTransaksi').val() || $('#tanggal').val() || '',
+    jenis: $('#jenisTransaksi').val() || $('#jenis').val() || '',
+    kategori: $('#kategoriTransaksi').val() || $('#kategori').val() || '',
+    jumlah: $('#jumlahTransaksi').val() || $('#jumlah').val() || 0,
+    metode: $('#metodeTransaksi').val() || $('#metode').val() || '',
+    deskripsi: $('#deskripsiTransaksi').val() || $('#keterangan').val() || ''
+  };
+
+  // Validasi input minimal
+  if (!data.jumlah || data.jumlah == 0) {
+    Swal.fire('Perhatian', 'Jumlah nominal transaksi tidak boleh kosong!', 'warning');
+    return;
+  }
+
+  // 3. Tentukan fungsi server yang akan dipanggil
+  let namaFungsiServer = id ? 'updateTransaksi' : 'simpanTransaksiBaru';
+
+  Swal.fire({
+    title: id ? 'Memperbarui Transaksi...' : 'Menyimpan Transaksi Baru...',
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  // 4. Kirim data ke Kode.gs
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.success) {
+        Swal.fire('Berhasil!', res.message || 'Data transaksi berhasil disimpan.', 'success');
+        
+        // Tutup modal dan bersihkan form
+        $('#modalTransaksi').modal('hide');
+        if ($('#formTransaksi').length) $('#formTransaksi')[0].reset();
+        $('#idTransaksi').val(''); // Kosongkan ID agar kembali ke mode 'Tambah Baru'
+        
+        // Refresh tabel & summary keuangan
+        if (typeof muatDataKeuangan === "function") muatDataKeuangan();
+        else if (typeof loadDataKeuangan === "function") loadDataKeuangan();
+      } else {
+        Swal.fire('Gagal!', (res ? res.message : 'Terjadi kesalahan saat menyimpan.'), 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      Swal.fire('Eror Sistem!', err.message, 'error');
+    })[namaFungsiServer](data);
+}
+
+function eksekusiSimpanWarga() {
+  let data = {
+    nik: $('#nikWarga').val() || $('#nik').val() || '',
+    nama: $('#namaWarga').val() || $('#nama').val() || '',
+    alamat: $('#alamatWarga').val() || $('#alamat').val() || '',
+    noHp: $('#noHpWarga').val() || $('#noHp').val() || ''
+  };
+
+  if (!data.nik || !data.nama) {
+    Swal.fire('Lengkapi Data!', 'NIK dan Nama Warga wajib diisi.', 'warning');
+    return;
+  }
+
+  Swal.fire({ title: 'Menyimpan Warga...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.success) {
+        Swal.fire('Sukses!', res.message, 'success');
+        $('#modalWarga').modal('hide');
+        if (typeof muatDataWarga === 'function') muatDataWarga();
+      } else {
+        Swal.fire('Gagal!', res ? res.message : 'Terjadi kesalahan', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      Swal.fire('Eror Sistem!', err.message, 'error');
+    })
+    .tambahWarga(data); // <-- Memanggil tambahWarga
+}
+
+function prosesKirimKeServerSheet(data, id) {
+  // Jika ada ID -> panggil updateBerita
+  // Jika TIDAK ADA ID -> panggil simpanBeritaBaru (sesuai nama fungsi di Kode.gs Anda)
+  let namaFungsiServer = id ? 'updateBerita' : 'simpanBeritaBaru';
+
+  Swal.fire({
+    title: id ? 'Memperbarui Berita...' : 'Menyimpan Berita Baru...',
+    allowOutsideClick: false,
+    didOpen: () => { Swal.showLoading(); }
+  });
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      // Jika fungsi server mengembalikan objek {success: true} atau pesan sukses
+      Swal.fire('Sukses!', 'Data berita berhasil diproses.', 'success');
+      
+      $('#modalBerita').modal('hide'); 
+      if ($('#formBerita').length) $('#formBerita')[0].reset();
+      
+      // Kosongkan ID agar form kembali bersih ke mode Tambah Baru
+      $('#idBerita').val(''); 
+      $('#id_berita').val('');
+
+      // Refresh data tabel
+      if (typeof muatDataBerita === "function") muatDataBerita();
+      else if (typeof loadDataBerita === "function") loadDataBerita();
+      else if (typeof refreshTabelBerita === "function") refreshTabelBerita();
+    })
+    .withFailureHandler(function(err) {
+      Swal.fire('Eror Simpan!', err.message, 'error');
+    })[namaFungsiServer](data); // Memanggil simpanBeritaBaru atau updateBerita
+}
+
+// Fungsi opsional pembantu format tanggal hari ini (DD-MM-YYYY) jika diperlukan di depan
+function UtilitiesFormatedDate() {
+  let d = new Date();
+  let day = String(d.getDate()).padStart(2, '0');
+  let month = String(d.getMonth() + 1).padStart(2, '0');
+  let year = d.getFullYear();
+  return day + '-' + month + '-' + year;
+}
+
+// Mesin penyaring baris tabel berdasarkan tanggal
+$.fn.dataTable.ext.search.push(
+  function(settings, data, dataIndex) {
+    // Ambil nilai dari input filter tanggal milik Anda
+    var tglMulaiStr = $('#filterTanggalMulai').val() || $('#tanggalMulai').val() || "";
+    var tglSelesaiStr = $('#filterTanggalSelesai').val() || $('#tanggalSelesai').val() || "";
+    
+    // DETEKSI OTOMATIS: Mendukung format Objek maupun format Array dari tabel Anda
+    // Mengambil kolom tanggal (Indeks 1)
+    var tglTabelStr = data[1] || ""; 
+    
+    // Jika semua input filter kosong, langsung loloskan semua baris data
+    if (!tglMulaiStr && !tglSelesaiStr) {
+      return true; 
+    }
+    
+    
+    // Fungsi internal untuk mengubah teks tanggal menjadi Objek Waktu Valid
+    function buatObjekTanggal(teksTanggal) {
+      if (!teksTanggal) return null;
+      
+      // Bersihkan teks tanggal jika mengandung tag HTML (misalnya link dokumen)
+      teksTanggal = teksTanggal.replace(/<[^>]*>/g, '').trim();
+      
+      // Mengatasi format tanggal Indonesia DD-MM-YYYY atau DD/MM/YYYY
+      if (teksTanggal.includes('-') || teksTanggal.includes('/')) {
+        var pemisah = teksTanggal.includes('-') ? '-' : '/';
+        var bagian = teksTanggal.split(pemisah);
+        
+        // Jika format terdeteksi Hari-Bulan-Tahun (Contoh: 14-07-2026 atau 14/07/2026)
+        if (bagian.length === 3 && bagian[0].length === 2 && bagian[2].length === 4) {
+          // Balik urutannya menjadi format standar internasional: Tahun-Bulan-Hari
+          teksTanggal = bagian[2] + '-' + bagian[1] + '-' + bagian[0];
+        }
+      }
+      
+      var d = new Date(teksTanggal);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
+    // Ubah data teks menjadi objek waktu standar komputer
+    var tanggalTabel = buatObjekTanggal(tglTabelStr);
+    var tanggalMin = tglMulaiStr ? new Date(tglMulaiStr + "T00:00:00") : null;
+    var tanggalMax = tglSelesaiStr ? new Date(tglSelesaiStr + "T23:59:59") : null;
+    
+    // Jika tanggal di baris tabel kosong atau rusak, sembunyikan baris tersebut
+    if (!tanggalTabel) return false;
+
+    // Reset jam ke 00:00:00 agar perbandingan hari menjadi adil dan akurat
+    tanggalTabel.setHours(0,0,0,0);
+    if (tanggalMin) tanggalMin.setHours(0,0,0,0);
+    if (tanggalMax) tanggalMax.setHours(0,0,0,0);
+
+    // Ambil nilai milidetik untuk komparasi matematika biasa
+    var nilaiTabel = tanggalTabel.getTime();
+    var nilaiMin = tanggalMin ? tanggalMin.getTime() : null;
+    var nilaiMax = tanggalMax ? tanggalMax.getTime() : null;
+
+    if (nilaiMin && nilaiTabel < nilaiMin) return false; // Sembunyikan jika kurang dari tanggal mulai
+    if (nilaiMax && nilaiTabel > nilaiMax) return false; // Sembunyikan jika melewati tanggal akhir
+    
+    return true; // Tampilkan baris jika lolos kriteria rentang tanggal
+  }
+);
+
+function konversiKeDateObject(tglStr) {
+  if (!tglStr) return null;
+  tglStr = tglStr.trim();
+  if (tglStr.includes('-') && tglStr.indexOf('-') === 2) {
+    var bagian = tglStr.split('-');
+    return new Date(bagian[2], bagian[1] - 1, bagian[0]);
+  }
+  return new Date(tglStr);
+}
+
+// Fungsi pembantu pembaca format tanggal murni
+function konversiKeDateObject(tglStr) {
+  if (!tglStr) return null;
+  tglStr = tglStr.trim();
+  
+  // Jika format tanggal di tabel Anda DD-MM-YYYY (Contoh: 11-07-2026)
+  if (tglStr.includes('-') && tglStr.indexOf('-') === 2) {
+    var bagian = tglStr.split('-');
+    return new Date(bagian[2], bagian[1] - 1, bagian[0]);
+  }
+  // Jika format tanggal di tabel Anda YYYY-MM-DD (Contoh: 2026-07-11)
+  return new Date(tglStr);
+}
+
+// ==========================================
+// KODE PEMICU FILTER TANGGAL - VERSI AMAN AUTOMATIS
+// ==========================================
+// Tambahkan event pendengar agar setiap kali tabel melakukan proses draw (termasuk filter), summary ikut terupdate
+$(document).on('click', '#btnFilter, #btnCari', function() {
+  var tabelInstan = $('#tabelData').DataTable({ retrieve: true }); 
+  if (tabelInstan) {
+    tabelInstan.draw();
+    
+    // Ambil baris data yang LOLOS filter tanggal saja untuk dihitung ke modal summary
+    var dataTersaring = tabelInstan.rows({ filter: 'applied' }).data().toArray();
+    updateSummaryModal(dataTersaring); 
+
+    Swal.fire({ icon: 'success', title: 'Ringkasan Diperbarui', timer: 1000, showConfirmButton: false });
+  }
+});
+
+// Efek Tombol Reset Ringkasan ke Data Semula
+$(document).on('click', '#btnResetFilter, #btnReset', function() {
+  $('#filterTanggalMulai, #tanggalMulai, #filterTanggalSelesai, #tanggalSelesai').val('');
+  var tabelInstan = $('#tabelData').DataTable({ retrieve: true });
+  if (tabelInstan) {
+    tabelInstan.draw();
+    // Kembalikan summary menghitung semua data kembali
+    var dataSemua = tabelInstan.rows().data().toArray();
+    updateSummaryModal(dataSemua);
+  }
+});
+
+// Aksi reset filter tanggal berita
+$(document).on('click', '#btnResetFilterBerita', function() {
+  $('#tglAwalBerita').val('');
+  $('#tglAkhirBerita').val('');
+  if (typeof datatableBerita !== 'undefined' && datatableBerita) {
+    datatableBerita.draw(); // Refresh tabel setelah filter dikosongkan
+  }
+});
+
+// ==========================================
+// 📊 KONTROL FILTER DI DALAM MODAL SUMMARY (POPUP)
+// ==========================================
+// Deteksi otomatis saat user memilih rentang tanggal di dalam Modal Detail Summary
+$(document).on('change', '#tglAwal, #tglAkhir', function() {
+  // Memastikan variabel data global dari Google Sheets Anda tersedia sebelum dihitung
+  var sumberData = (typeof dataTransaksi !== 'undefined') ? dataTransaksi : [];
+  
+  if (sumberData.length > 0) {
+    updateSummaryModal(sumberData); // Jalankan fungsi hitung summary yang baru
+  }
+});
+
+// ==========================================
+// AKSI KLIK TOMBOL ACC SURAT
+// ==========================================
+$(document).on('click', '.btn-acc', function() {
+  var idSurat = $(this).data('id');
+  
+  Swal.fire({
+    title: 'Setujui Pengajuan Surat?',
+    text: "Status surat akan diubah menjadi Disetujui.",
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#198754',
+    confirmButtonText: 'Ya, ACC!'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.showLoading();
+      
+      // Kirim perintah ubah status ke server Code.gs
+      google.script.run
+        .withSuccessHandler(function(res) {
+          Swal.fire('Berhasil!', 'Surat telah di-ACC dan siap dicetak.', 'success');
+          if (typeof refreshTabelSurat === 'function') refreshTabelSurat(); // Refresh tabel Anda
+        })
+        .withFailureHandler(function(err) {
+          Swal.fire('Gagal', err.message, 'error');
+        })
+        .accSuratDiServer(idSurat);
+    }
+  });
+});
+
+// ==========================================
+// AKSI KLIK TOMBOL ACC SURAT
+// ==========================================
+$(document).on('click', '.btn-acc', function() {
+  var idSurat = $(this).data('id');
+  
+  Swal.fire({
+    title: 'Setujui Pengajuan Surat?',
+    text: "Status surat akan diubah menjadi Disetujui.",
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#198754',
+    confirmButtonText: 'Ya, ACC!'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.showLoading();
+      
+      // Kirim perintah ubah status ke server Code.gs
+      google.script.run
+        .withSuccessHandler(function(res) {
+          Swal.fire('Berhasil!', 'Surat telah di-ACC dan siap dicetak.', 'success');
+          if (typeof refreshTabelSurat === 'function') refreshTabelSurat(); // Refresh tabel Anda
+        })
+        .withFailureHandler(function(err) {
+          Swal.fire('Gagal', err.message, 'error');
+        })
+        .accSuratDiServer(idSurat);
+    }
+  });
+});
+// ==========================================
+// AKSI KLIK TOMBOL CETAK SURAT
+// ==========================================
+$(document).on('click', '.btn-cetak', function() {
+  var idSurat = $(this).data('id');
+  
+  // Trik Cetak Mudah: Buka halaman cetak template surat di tab baru
+  // Kita melempar parameter ID Surat lewat URL
+  var urlCetak = google.script.host.origin + '?page=cetakSurat&id=' + idSurat;
+  
+  // Jika deploy menggunakan web app biasa, kita bisa membuat modal popup window
+  window.open(urlCetak, '_blank', 'width=800,height=600');
+});
+
+
+// =========================================================================
+// 📊 FIX AKHIR: INTEGRASI KOLOM AKSI EDIT + HAPUS (ANTI-ERROR & REALTIME)
+// =========================================================================
+function muatTabelBerita() {
+  google.script.run
+    .withSuccessHandler(function(dataBerita) {
+      if (!dataBerita || !Array.isArray(dataBerita)) dataBerita = [];
+
+      // Hancurkan instans DataTable lama jika sudah ada di browser agar tidak duplikat
+      if ($.fn.DataTable.isDataTable('#tabelBerita')) {
+        $('#tabelBerita').DataTable().destroy();
+        $('#tabelBerita').empty(); 
+      }
+
+      // Bangun ulang struktur DataTable baru dengan muatan data paling gres
+      datatableBerita = $('#tabelBerita').DataTable({
+        data: dataBerita,
+        destroy: true,
+        columns: [
+          { data: 'id', title: 'ID', defaultContent: '-' },
+          { data: 'tanggal', title: 'Tanggal', defaultContent: '-' },
+          { 
+            // 🌟 FIX UTAMA: Diubah ke 'gambarUrl' agar baris tabel tidak error dan merusak tombol aksi bawah
+            data: 'gambarUrl', title: 'Foto Berita', defaultContent: '',
+            render: function(d) {
+              if (d && d.trim() !== '' && d !== '-') {
+                return `
+                  <div class="text-center">
+                    <a href="${d}" target="_blank" title="Klik untuk membuka ukuran asli">
+                      <img src="${d}" referrerpolicy="no-referrer" style="width: 55px; height: 55px; object-fit: cover; border-radius: 6px; border: 1px solid #dee2e6;" onerror="this.onerror=null; this.src='https://placehold.co';">
+                    </a>
+                  </div>`;
+              }
+              return '<div class="text-center"><span class="badge bg-light text-dark border">Tanpa Foto</span></div>';
+            }
+          },
+          { data: 'judul', title: 'Judul Berita', defaultContent: '-' },
+          { 
+            data: 'isi', title: 'Isi Berita', defaultContent: '-',
+            render: function(d) {
+              return (d && d.length > 70) ? d.substring(0, 70) + '...' : d;
+            }
+          },
+          {
+            // 🌟 GABUNGAN TOMBOL AKSI: Menampilkan tombol Edit (Kuning) dan Hapus (Merah) sekaligus
+            data: null, title: 'Aksi', defaultContent: '',
+            render: function(data, type, row) {
+              // Menoleransi jika di Google Sheets nama kolom ID memakai huruf besar/kecil
+              let idAman = row.id || row.ID || row.Id || '';
+              
+              return `
+                <div class="text-center">
+                  <button type="button" class="btn btn-sm btn-outline-warning me-1" onclick="editBerita('${idAman}')">
+                    <i class="bi bi-pencil"></i> Edit
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" onclick="konfirmasiHapusBerita('${idAman}')">
+                    <i class="bi bi-trash"></i> Hapus
+                  </button>
+                </div>`;
+            }
+          }
+        ],
+        language: { emptyTable: "Tidak ada catatan berita yang ditemukan." },
+        order: [[0, 'desc']] // Diurutkan berdasarkan nomor ID terbesar (berita paling gres)
+      });
+    })
+    .withFailureHandler(function(err) {
+      console.error("Gagal menarik data berita dari spreadsheet: ", err.message);
+    })
+    .getBerita(); 
+}
+
+// TEMPEL KODE INI DI BARIS PALING BAWAH FILE SCRIPT.HTML ANDA
+function klikTombolAcc(idSuratMurni) {
+  if (!idSuratMurni || idSuratMurni === 'undefined') {
+    Swal.fire('Eror Aplikasi!', 'ID Surat gagal dibaca oleh browser.', 'error');
+    return;
+  }
+
+  Swal.fire({
+    title: 'Setujui Surat Ini?',
+    text: "Status surat akan berubah menjadi Disetujui di sistem.",
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#28a745',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Ya, ACC!'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      Swal.fire({ title: 'Memproses Persetujuan...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
+
+      // HUBUNGKAN LANGSUNG KE FUNGSI ACCSURATDISERVER DI KODE.GS
+      google.script.run
+        .withSuccessHandler(function(res) {
+          Swal.close();
+          if (res && res.success) {
+            Swal.fire('Berhasil!', res.message, 'success');
+            
+            // Muat ulang tabel layanan surat secara realtime agar status berubah jadi hijau
+            if (typeof muatLayananSurat === 'function') { muatLayananSurat(); }
+          } else {
+            Swal.fire('Gagal!', res.message, 'error');
+          }
+        })
+        .withFailureHandler(function(err) {
+          Swal.close();
+          Swal.fire('Gagal Sistem!', 'Eror Server: ' + err.message, 'error');
+        })
+        .accSuratDiServer({ id: idSuratMurni });// Menembak fungsi server Anda yang benar
+    }
+  });
+}
+
+</script>
+
+
