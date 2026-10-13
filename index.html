@@ -258,29 +258,7 @@
     </div>
   </div>
 
-   <script>
-    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzdY0-JrylBpbT9TC5KrP8cWbwPdd_9saJk-mPHAeS9amcevsyz5GkPfuKtLpk3ZG-Ng/exec";
-
-   function muatDataBerita() {
-      $.ajax({
-        url: SCRIPT_URL + "?action=getBerita",
-        dataType: "jsonp",
-        success: function(data) {
-          let html = "";
-          if (!data || data.length === 0) {
-            html = '<div class="col-12 text-center text-muted"><p>Belum ada berita atau informasi.</p></div>';
-          } else {
-            data.forEach(item => {
-              html += <div class="col-md-4"> <div class="card p-3 shadow-sm h-100"> <h5>${item.judul || ''}</h5> <p class="text-muted small">${item.tanggal || ''}</p> <p>${item.isi || ''}</p> ${item.gambar ?  : ''} </div> </div>;
-          });
-        }
-      document.getElementById("container-berita").innerHTML = html;
-      },
-  error: function(jqXHR, textStatus, errorThrown) {
-console.error("Gagal memuat berita:", textStatus, errorThrown);
-}
-});
-}
+   
 <?!= include("Script"); ?>
 </body>
 </html>
