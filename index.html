@@ -218,16 +218,20 @@ function mintaAksesPengurus() {
   }
   
   Swal.fire({
-    title: 'Akses Terbatas Pengurus',
-    input: 'password',
-    inputLabel: 'Masukkan PIN Pengurus RT/RW',
-    inputPlaceholder: 'Ketik PIN Anda...',
-    showCancelButton: true,
-    confirmButtonText: 'Verifikasi',
-    cancelButtonText: 'Batal'
-  }).then((result) => {
-    if (result.isConfirmed) {
-      google.script.run.withSuccessHandler(function(valid) {
+  title: 'Akses Terbatas Pengurus',
+  input: 'password',
+  inputLabel: 'Masukkan PIN Pengurus RT/RW',
+  inputPlaceholder: 'Ketik PIN Anda...',
+  showCancelButton: true,
+  confirmButtonText: 'Verifikasi',
+  cancelButtonText: 'Batal'
+}).then((result) => {
+  if (result.isConfirmed) {
+    // 🌟 Ganti google.script.run dengan $.ajax menggunakan metode JSONP
+    $.ajax({
+      url: SCRIPT_URL + '?action=cekPin&pin=' + encodeURIComponent(result.value),
+      dataType: 'jsonp',
+      success: function(valid) {
         if(valid) {
           isPengurus = true;
           Swal.fire('Berhasil!', 'Akses pengurus dikonfirmasi.', 'success');
@@ -235,9 +239,14 @@ function mintaAksesPengurus() {
         } else {
           Swal.fire('Gagal!', 'PIN salah, Anda tidak memiliki hak akses.', 'error');
         }
-      }).cekPinPengurus(result.value);
-    }
-  });
+      },
+      error: function(xhr, status, error) {
+        console.error("Gagal memverifikasi PIN:", error);
+        Swal.fire('Eror!', 'Terjadi kesalahan koneksi ke server.', 'error');
+      }
+    });
+  }
+});
 }
 
 function tampilkanMenuPengurusLengkap() {
