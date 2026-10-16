@@ -1655,8 +1655,12 @@ $(document).on('click', '.btn-cetak', function() {
 // 📊 FIX AKHIR: INTEGRASI KOLOM AKSI EDIT + HAPUS (ANTI-ERROR & REALTIME)
 // =========================================================================
 function muatTabelBerita() {
-  google.script.run
-    .withSuccessHandler(function(dataBerita) {
+  // Menggunakan SCRIPT_URL dan dataType "jsonp" untuk menghindari CORS
+  $.ajax({
+    url: SCRIPT_URL + '?action=getBerita', // 🌟 Menghubungkan ke Web App Google Apps Script
+    dataType: 'jsonp',                     // 🌟 Wajib jsonp untuk bypass CORS Google Apps Script
+    success: function(dataBerita) {
+      // Validasi data persis seperti logika awal Anda
       if (!dataBerita || !Array.isArray(dataBerita)) dataBerita = [];
 
       // Hancurkan instans DataTable lama jika sudah ada di browser agar tidak duplikat
@@ -1673,7 +1677,6 @@ function muatTabelBerita() {
           { data: 'id', title: 'ID', defaultContent: '-' },
           { data: 'tanggal', title: 'Tanggal', defaultContent: '-' },
           { 
-            // 🌟 FIX UTAMA: Diubah ke 'gambarUrl' agar baris tabel tidak error dan merusak tombol aksi bawah
             data: 'gambarUrl', title: 'Foto Berita', defaultContent: '',
             render: function(d) {
               if (d && d.trim() !== '' && d !== '-') {
@@ -1695,10 +1698,8 @@ function muatTabelBerita() {
             }
           },
           {
-            // 🌟 GABUNGAN TOMBOL AKSI: Menampilkan tombol Edit (Kuning) dan Hapus (Merah) sekaligus
             data: null, title: 'Aksi', defaultContent: '',
             render: function(data, type, row) {
-              // Menoleransi jika di Google Sheets nama kolom ID memakai huruf besar/kecil
               let idAman = row.id || row.ID || row.Id || '';
               
               return `
@@ -1714,15 +1715,14 @@ function muatTabelBerita() {
           }
         ],
         language: { emptyTable: "Tidak ada catatan berita yang ditemukan." },
-        order: [[0, 'desc']] // Diurutkan berdasarkan nomor ID terbesar (berita paling gres)
+        order: [[0, 'desc']] 
       });
-    })
-    .withFailureHandler(function(err) {
-      console.error("Gagal menarik data berita dari spreadsheet: ", err.message);
-    })
-    .getBerita(); 
+    },
+    error: function(xhr, status, error) {
+      console.error("Gagal menarik data berita dari spreadsheet via API: ", error);
+    }
+  });
 }
-
 // TEMPEL KODE INI DI BARIS PALING BAWAH FILE SCRIPT.HTML ANDA
 function klikTombolAcc(idSuratMurni) {
   if (!idSuratMurni || idSuratMurni === 'undefined') {
