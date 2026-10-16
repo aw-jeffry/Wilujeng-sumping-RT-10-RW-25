@@ -16,8 +16,6 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.datatables.net/v/bs5/jszip-3.10.1/dt-2.3.4/b-3.2.5/b-html5-3.2.5/r-3.0.7/datatables.min.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
-
-  <?!= include("Style"); ?>
 </head>
 
 <body>
@@ -25,10 +23,9 @@
   <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top shadow">
     <div class="container">
       <a class="navbar-brand d-flex align-items-center gap-2" href="#" onclick="bukaMenu('beranda')">
-      <!-- ===== MENAMBAH LOGO DISINI ===== -->
         <span class="fw-bold">"Wilujeng sumping" RT 10/RW 25</span>
       </a>
-      <button class="navbar-expand navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="navbarNav">
@@ -41,7 +38,7 @@
     </div>
   </nav>
 
-  <!-- SIDEBAR KHUSUS PENGURUS (AKAN MUNCUL JIKA PIN BENAR) -->
+  <!-- SIDEBAR KHUSUS PENGURUS -->
   <div class="container my-3 text-end d-none" id="statusPengurusBadge">
     <span class="badge bg-success p-2"><i class="bi bi-check-circle-fill"></i> Mode Pengurus Aktif</span>
     <button class="btn btn-sm btn-outline-danger ms-2" onclick="keluarModePengurus()">Keluar</button>
@@ -49,12 +46,8 @@
 
   <div class="container my-4 flex-grow-1">
     
-   <!-- ========================================== -->
-    <!-- 1. MENU BERANDA (UMUM)                     -->
-    <!-- ========================================== -->
+    <!-- 1. MENU BERANDA -->
     <div id="menu-beranda" class="menu-content">
-      
-      <!-- Tambahan: Ringkasan Kas RT untuk Umum -->
       <div class="row text-center mb-4 g-3">
         <div class="col-md-4">
           <div class="card bg-success text-white p-3 shadow-sm" style="border-left: 5px solid #1e7e34 !important;">
@@ -84,9 +77,8 @@
         <!-- Berita dimuat lewat JavaScript -->
       </div>
     </div>
-    <!-- ========================================== -->
-    <!-- 2. LAYANAN SURAT (UMUM & PENGURUS)         -->
-    <!-- ========================================== -->
+
+    <!-- 2. LAYANAN SURAT -->
     <div id="menu-surat" class="menu-content d-none">
       <div class="card p-4 shadow-sm mb-4">
         <h4><i class="bi bi-pencil-square text-success"></i> Formulir Pengajuan Surat Pengantar</h4>
@@ -94,7 +86,7 @@
         <form id="formSurat">
           <div class="row g-3">
             <div class="col-md-6"><label class="form-label">Nama Lengkap</label><input type="text" id="suratNama" class="form-control" required></div>
-            <div class="col-md-6"><label class="form-label">NIK (Nomor Induk Kependudukan)</label><input type="text" id="suratNik" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">NIK</label><input type="text" id="suratNik" class="form-control" required></div>
             <div class="col-md-6"><label class="form-label">Alamat Rumah </label><input type="text" id="suratAlamat" class="form-control" required></div>
             <div class="col-md-6">
               <label class="form-label">Jenis Surat</label>
@@ -105,23 +97,14 @@
                 <option value="Surat Keterangan Usaha (SKU)">Surat Keterangan Usaha (SKU)</option>
               </select>
             </div>
-            <div class="col-md-6"><label class="form-label">Keperluan / Keterangan Tambahan</label><input type="text" id="suratKet" class="form-control" required></div>
+            <div class="col-md-6"><label class="form-label">Keperluan</label><input type="text" id="suratKet" class="form-control" required></div>
             <div class="col-12 text-end"><button type="submit" class="btn btn-success"><i class="bi bi-send"></i> Kirim Pengajuan</button></div>
           </div>
         </form>
       </div>
-
-      <div class="card p-3 shadow-sm">
-        <h5 class="mb-3"><i class="bi bi-clock-history"></i> Daftar Riwayat Pengajuan Surat</h5>
-        <div class="table-responsive">
-          <table class="table table-striped table-bordered align-middle" id="tabelSurat" style="width:100%"></table>
-        </div>
-      </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- 3. DATA WARGA (KHUSUS PENGURUS)            -->
-    <!-- ========================================== -->
+    <!-- 3. DATA WARGA -->
     <div id="menu-warga" class="menu-content d-none">
       <div class="d-flex justify-content-between align-items-center mb-3">
         <h3><i class="bi bi-people-fill text-info"></i> Data Administrasi Warga</h3>
@@ -134,28 +117,14 @@
       </div>
     </div>
 
-    <!-- ========================================== -->
-    <!-- 4. LAPORAN PERTANGGUNGJAWABAN (PENGURUS)   -->
-    <!-- ========================================== -->
+    <!-- 4. LAPORAN KEUANGAN -->
     <div id="menu-laporan" class="menu-content d-none">
       <div class="header d-flex justify-content-between align-items-center mb-3 p-3 bg-light rounded shadow-sm">
         <div>
           <h3><i class="fa-solid fa-coins text-warning"></i> Laporan Keuangan & LPJ</h3>
           <p class="mb-0 text-muted">Ringkasan Pencatatan Uang Masuk & Uang Keluar</p>
         </div>
-        <div class="top-actions d-flex gap-2">
-          <select id="filterPeriode" class="form-select shadow-sm" style="width:160px;">
-            <option value="all">Semua Data</option>
-            <option value="mingguan">Minggu Ini</option>
-            <option value="bulanan">Bulan Ini</option>
-            <option value="tahunan">Tahun Ini</option>
-          </select>
-          <button class="btn btn-success" id="btnExport"><i class="bi bi-file-earmark-excel-fill"></i> Export</button>
-          <button class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#detailModal"><i class="bi bi-bar-chart-fill"></i> Detail Summary</button>
-          <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#formModal"><i class="bi bi-plus-circle"></i> Tambah Transaksi</button>
-        </div>
       </div>
-
       <div class="card p-2 shadow-sm">
         <div class="table-responsive">
           <table id="tabelData" class="table table-striped table-bordered align-middle mb-0" style="width:100%"></table>
@@ -168,12 +137,12 @@
   <div class="modal fade" id="beritaModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content">
-        <div class="modal-header bg-primary text-white"><h5><i class="bi bi-plus-circle"></i> Tambah Berita</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
+        <div class="modal-header bg-primary text-white"><h5>Tambah Berita</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
         <div class="modal-body">
           <form id="formBerita">
             <div class="mb-3"><label class="form-label">Judul Berita</label><input type="text" id="judulBerita" class="form-control" required></div>
             <div class="mb-3"><label class="form-label">Isi Berita</label><textarea id="isiBerita" class="form-control" rows="4" required></textarea></div>
-            <div class="mb-3"><label class="form-label">Upload Gambar Berita (Maks 10MB)</label><input type="file" id="gambarBerita" class="form-control" accept="image/*"></div>
+            <div class="mb-3"><label class="form-label">Upload Gambar</label><input type="file" id="gambarBerita" class="form-control" accept="image/*"></div>
             <button type="submit" class="btn btn-primary w-100">Simpan Berita</button>
           </form>
         </div>
@@ -181,87 +150,69 @@
     </div>
   </div>
 
-  <!-- Modal Tambah Warga -->
-  <div class="modal fade" id="wargaModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-      <div class="modal-content">
-        <div class="modal-header bg-info text-white"><h5><i class="bi bi-person-plus-fill"></i> Registrasi Data Warga</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body">
-          <form id="formWarga">
-            <div class="mb-2"><label class="form-label">NIK</label><input type="text" id="wargaNik" class="form-control" required></div>
-            <div class="mb-2"><label class="form-label">Nama Lengkap</label><input type="text" id="wargaNama" class="form-control" required></div>
-            <div class="mb-2"><label class="form-label">Alamat Rumah</label><input type="text" id="wargaAlamat" class="form-control" required></div>
-            <div class="mb-2"><label class="form-label">No. HP (WhatsApp)</label><input type="text" id="wargaHp" class="form-control" required></div>
-            <div class="mb-2">
-              <label class="form-label">Status Hubungan Keluarga</label>
-              <select id="wargaStatus" class="form-select">
-                <option value="Kepala Keluarga">Kepala Keluarga</option>
-                <option value="Istri">Istri</option>
-                <option value="Anak">Anak</option>
-                <option value="Anggota Keluarga">Anggota Keluarga</option>
-                <option value="Kontrak / Kos">Kontrak / Kos</option>
-              </select>
-            </div>
-            <button type="submit" class="btn btn-info text-white w-100 mt-2">Simpan Data Warga</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Transaksi (Form Tambah/Edit LPJ Keuangan) -->
+  <!-- Modal Transaksi -->
   <div class="modal fade" id="formModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content shadow-lg">
         <div class="modal-header bg-primary text-white py-3">
-          <h5 class="modal-title d-flex align-items-center gap-2"><i class="bi bi-journal-text fs-4"></i> Tambah/Edit Catatan Keuangan</h5>
+          <h5 class="modal-title">Tambah/Edit Catatan Keuangan</h5>
           <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <form id="transaksiForm">
             <input type="hidden" id="idTransaksi">
-            <div class="mb-2"><label class="form-label"><i class="bi bi-calendar-date text-warning"></i> Tanggal</label><input type="date" id="tanggal" class="form-control" required></div>
-            <div class="mb-2"><label class="form-label"><i class="bi bi-arrow-left-right text-success"></i> Jenis</label><select id="jenis" class="form-select" required><option value="" disabled selected>Pilih jenis</option></select></div>
-            <div class="mb-2"><label class="form-label"><i class="bi bi-tags text-secondary"></i> Kategori</label><select id="kategori" class="form-select" required><option value="" disabled selected>Pilih kategori</option></select></div>
-            <div class="mb-2"><label class="form-label"><i class="bi bi-cash-stack text-success"></i> Jumlah (Rp)</label><input type="text" id="jumlah" inputmode="numeric" class="form-control" required></div>
-            <div class="mb-2"><label class="form-label"><i class="bi bi-credit-card text-danger"></i> Metode Pembayaran</label><select id="metode" class="form-select" required><option value="" disabled selected>Pilih metode</option></select></div>
-            <div class="mb-2"><label class="form-label"><i class="bi bi-paperclip text-info"></i> Upload Nota File (opsional)</label><input type="file" id="fileUpload" class="form-control" accept=".jpg,.jpeg,.png,.pdf"></div>
-            <div class="mb-2"><label class="form-label"><i class="bi bi-chat-text text-primary"></i> Deskripsi</label><textarea id="deskripsi" class="form-control" rows="2" placeholder="Keterangan opsional"></textarea></div>
+            <div class="mb-2"><label class="form-label">Tanggal</label><input type="date" id="tanggal" class="form-control" required></div>
+            <div class="mb-2"><label class="form-label">Jumlah (Rp)</label><input type="text" id="jumlah" class="form-control" required></div>
           </form>
         </div>
-        <div class="modal-footer py-2"><button class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button><button class="btn btn-primary" id="btnSimpan">Simpan Transaksi</button></div>
-       <button type="button" class="btn btn-primary" onclick="eksekusiSimpanTransaksi()">Simpan Transaksi</button>
-      </div>         
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal Detail Summary Keuangan -->
-  <div class="modal fade" id="detailModal" tabindex="-1">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-      <div class="modal-content shadow-lg">
-        <div class="modal-header bg-info text-white py-3"><h5><i class="bi bi-graph-up"></i> Detail Grafik & Ringkasan Laporan</h5><button class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div>
-        <div class="modal-body">
-          <div class="p-3 mb-3 bg-light rounded shadow-sm row align-items-end g-2">
-            <div class="col-md-4"><label class="mb-1">Tanggal Awal</label><input type="date" id="tglAwal" class="form-control"></div>
-            <div class="col-md-4"><label class="mb-1">Tanggal Akhir</label><input type="date" id="tglAkhir" class="form-control"></div>
-            <div class="col-md-4"><button class="btn btn-success w-100" id="btnExportDetail"><i class="bi bi-file-earmark-excel-fill"></i> Export Custom Excel</button></div>
-          </div>
-          <div class="row text-center mb-3 g-3">
-            <div class="col-md-4"><div class="card bg-success text-white p-3"><h6>Total Pendapatan</h6><h4 id="cardPendapatan">Rp 0</h4></div></div>
-            <div class="col-md-4"><div class="card bg-danger text-white p-3"><h6>Total Pengeluaran</h6><h4 id="cardPengeluaran">Rp 0</h4></div></div>
-            <div class="col-md-4"><div class="card bg-primary text-white p-3"><h6>Sisa Kas Saldo</h6><h4 id="cardSaldo">Rp 0</h4></div></div>
-          </div>
-          <div class="table-responsive"><table id="detailTable" class="table table-striped table-bordered" style="width:100%;"></table></div>
+        <div class="modal-footer py-2">
+          <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Batal</button>
+          <button type="button" class="btn btn-primary" onclick="eksekusiSimpanTransaksi()">Simpan Transaksi</button>
         </div>
       </div>
     </div>
   </div>
 
-   <script>
+  <!-- ===== SKRIP LOGIKA UTAMA (PENGGANTI Script.html) ===== -->
+  <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzdY0-JrylBpbT9TC5KrP8cWbwPdd_9saJk-mPHAeS9amcevsyz5GkPfuKtLpk3ZG-Ng/exec";
 
+    function muatDataBerita() {
+      $.ajax({
+        url: SCRIPT_URL + "?action=getBerita",
+        dataType: "jsonp",
+        success: function(data) {
+          let html = "";
+          if (!data || data.length === 0) {
+            html = '<div class="col-12 text-center text-muted"><p>Belum ada berita atau informasi.</p></div>';
+          } else {
+            data.forEach(item => {
+              html += `<div class="col-md-4">
+                         <div class="card p-3 shadow-sm h-100">
+                           <h5>${item.judul || ''}</h5>
+                           <p class="text-muted small">${item.tanggal || ''}</p>
+                           <p>${item.isi || ''}</p>
+                           ${item.gambar ? `<img src="${item.gambar}" style="width:100%; height:180px; object-fit:contain; background:#f8f9fa;" />` : ''}
+                         </div>
+                       </div>`;
+            });
+          }
+          document.getElementById("container-berita").innerHTML = html;
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+          console.error("Gagal memuat berita:", textStatus, errorThrown);
+        }
+      });
+    }
+
+    function bukaMenu(menu) {
+      $('.menu-content').addClass('d-none');$('#menu-' + menu).removeClass('d-none');
+    }
+
+    // Jalankan saat halaman dibuka
+    $(document).ready(function() {
+      muatDataBerita();
+    });
   </script>
-<?!= include("Script"); ?>
 </body>
 </html>
