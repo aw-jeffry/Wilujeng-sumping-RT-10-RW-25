@@ -1655,12 +1655,10 @@ $(document).on('click', '.btn-cetak', function() {
 // 📊 FIX AKHIR: INTEGRASI KOLOM AKSI EDIT + HAPUS (ANTI-ERROR & REALTIME)
 // =========================================================================
 function muatTabelBerita() {
-  // Menggunakan SCRIPT_URL dan dataType "jsonp" untuk menghindari CORS
   $.ajax({
-    url: SCRIPT_URL + '?action=getBerita', // 🌟 Menghubungkan ke Web App Google Apps Script
-    dataType: 'jsonp',                     // 🌟 Wajib jsonp untuk bypass CORS Google Apps Script
+    url: "https://script.google.com/macros/s/AKfycbzEn97upxkzIocygoOOeVY0XpUQRJlgzheWypHx1WdYj3qCiXBLkkLKiVeXlaOY4ED4Sw/exec" + "?action=getBerita",
+    dataType: 'jsonp', // 🌟 Wajib jsonp untuk bypass CORS Google Apps Script
     success: function(dataBerita) {
-      // Validasi data persis seperti logika awal Anda
       if (!dataBerita || !Array.isArray(dataBerita)) dataBerita = [];
 
       // Hancurkan instans DataTable lama jika sudah ada di browser agar tidak duplikat
@@ -1669,7 +1667,7 @@ function muatTabelBerita() {
         $('#tabelBerita').empty(); 
       }
 
-      // Bangun ulang struktur DataTable baru dengan muatan data paling gres
+      // Bangun ulang struktur DataTable
       datatableBerita = $('#tabelBerita').DataTable({
         data: dataBerita,
         destroy: true,
@@ -1701,7 +1699,6 @@ function muatTabelBerita() {
             data: null, title: 'Aksi', defaultContent: '',
             render: function(data, type, row) {
               let idAman = row.id || row.ID || row.Id || '';
-              
               return `
                 <div class="text-center">
                   <button type="button" class="btn btn-sm btn-outline-warning me-1" onclick="editBerita('${idAman}')">
@@ -1723,6 +1720,7 @@ function muatTabelBerita() {
     }
   });
 }
+    
 // TEMPEL KODE INI DI BARIS PALING BAWAH FILE SCRIPT.HTML ANDA
 function klikTombolAcc(idSuratMurni) {
   if (!idSuratMurni || idSuratMurni === 'undefined') {
