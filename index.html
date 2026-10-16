@@ -265,31 +265,31 @@ function keluarModePengurus() {
 // 🏠 CORE BERANDA & BERITA LOGIC
 // ==========================================
 function muatBerita() {
-  $('#container-berita').html('<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>');
-  google.script.run.withSuccessHandler(function(res) {
-    let html = '';
-    if (!res || res.length === 0) {
-      html = `<div class="col-12 text-center text-muted py-5"><i class="bi bi-chat-left-dots fs-1"></i><p class="mt-2">Belum ada pengumuman/berita warga.</p></div>`;
-    } else {
-      res.forEach(item => {
-        // PERBAIKAN: Berikan toleransi pengecekan jika properti bernama gambarUrl atau gambar
-        let srcGambar = item.gambarUrl || item.gambar || 'https://placehold.co/600x400?text=Tanpa+Foto';
-        
-        html += `
-          <div class="col-md-4 mb-4">
-            <div class="card h-100 shadow-sm border-0 bg-light rounded-3 overflow-hidden">
-              <img src="${srcGambar}" class="card-img-top object-fit-cover" style="height:300px" alt="Gambar Informasi" onerror="this.onerror=null; this.src='https://placehold.co/600x400?text=Pending/Rusak';">
-              <div class="card-body">
-                <span class="badge bg-secondary mb-2">${item.tanggal || '-'}</span>
-                <h5 class="card-title fw-bold text-primary">${item.judul || '-'}</h5>
-                <p class="card-text text-truncate-3">${item.isi || '-'}</p>
-              </div>
-            </div>
-          </div>`;
-      });
+  $.ajax({
+    url: SCRIPT_URL + "?action=getBerita",
+    dataType: "jsonp",
+    success: function(data) {
+      let html = "";
+      if (!data || data.length === 0) {
+        html = '<div class="col-12 text-center text-muted"><p>Belum ada berita atau informasi.</p></div>';
+      } else {
+        data.forEach(item => {
+          html += `<div class="col-md-4">
+                     <div class="card p-3 shadow-sm h-100">
+                       <h5>${item.judul || ''}</h5>
+                       <p class="text-muted small">${item.tanggal || ''}</p>
+                       <p>${item.isi || ''}</p>
+                       ${item.gambar ? `<img src="${item.gambar}" style="width:100%; height:180px; object-fit:contain; background:#f8f9fa;" />` : ''}
+                     </div>
+                   </div>`;
+        });
+      }
+      document.getElementById("container-berita").innerHTML = html;
+    },
+    error: function(jqXHR, textStatus, errorThrown) {
+      console.error("Gagal memuat berita:", textStatus, errorThrown);
     }
-    $('#container-berita').html(html);
-  }).getBerita();
+  });
 }
 
 // Logika Form Berita Submit
